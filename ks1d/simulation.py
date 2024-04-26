@@ -4,6 +4,7 @@ import numpy as np
 np.random.seed(0)
 
 dt = .05
+start_time = 100
 end_time = 300
 N = 512
 u0 = np.random.uniform(-.4, .4, N)
@@ -32,7 +33,7 @@ def NonlinearRHS(_0, _1, u_hat, _2, **params):
 
 def update(self, u, u_hat, t, tstep, **params):
     u = u_hat.backward(u)
-    batch.append(np.array(u)) 
+    if t >= start_time: batch.append(np.array(u)) 
 
 integrator = sf.ETDRK4(T, L=LinearRHS, N=NonlinearRHS, update=update)
 

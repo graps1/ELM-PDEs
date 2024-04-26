@@ -46,7 +46,7 @@ class ELM1D(torch.nn.Module):
         return X
     
     def train(self, D, stopping_threshold=1e-5, noise=1e-4, logging=True, callback=None):
-        noise_distr = torch.distributions.Normal(0,noise)
+        if noise > 0: noise_distr = torch.distributions.Normal(0,noise)
 
         E_PhiTPhi = 0
         E_PhiTY = 0
@@ -72,7 +72,7 @@ class ELM1D(torch.nn.Module):
                 j = torch.randint(X_train.shape[1],(1,))[0]
                 X_train = X_train[:,j,:]
                 Y_train = Y_train[:,j,:]
-                X_train += noise_distr.sample(X_train.shape) 
+                if noise > 0: X_train += noise_distr.sample(X_train.shape) 
 
                 Phi = self.phi(X_train).detach()
 
@@ -143,7 +143,7 @@ class ELM2D(torch.nn.Module):
         return X
     
     def train(self, D, nr_symmetries=1, stopping_threshold=1e-5, noise=1e-4, logging=True, callback=None):
-        noise_distr = torch.distributions.Normal(0,noise)
+        if noise > 0: noise_distr = torch.distributions.Normal(0,noise)
 
         E_PhiTPhi = 0
         E_PhiTY = 0
@@ -172,7 +172,7 @@ class ELM2D(torch.nn.Module):
                 Y_train = Y_train.reshape(-1,self.step[0]*self.step[1])
 
                 # adds noise -> increases robustness
-                X_train += noise_distr.sample(X_train.shape) 
+                if noise > 0: X_train += noise_distr.sample(X_train.shape) 
                 Phi = self.phi(X_train).detach()
 
                 alpha = 1/(k+1)

@@ -4,6 +4,7 @@ import numpy as np
 np.random.seed(0)
 
 dt = .05
+start_time = 200
 end_time = 300
 N = 512
 u0 = np.random.uniform(-.4, .4, N)
@@ -30,15 +31,20 @@ k = T.wavenumbers(scaled=True, eliminate_highest_freq=True)
 def NonlinearRHS(_0, _1, u_hat, _2, **params):
     u_[:] = u_hat.backward() # compute coefficients of u_hat and put them into u_
     rhs = 1j * k * T.forward(-0.5*u_**2) 
-    rhs += T.forward(mu*np.cos(np.linspace(0,(1-1/N)*L,N)*2*np.pi/lambda_))
+
+    # inhomogenity 
+    x = np.linspace(0,(1-1/N)*L,N)
+    rhs += T.forward(mu*np.cos(2*np.pi*x/lambda_))
+    # also interesting to try:
+    # d = 4*(x-L/2)/L
+    # rhs += T.forward(-2*d*mu*np.exp(-d**2)*np.cos(4*d))
     return rhs
 
 def update(self, u, u_hat, t, tstep, **params):
-    u = u_hat.backward(u)
-    u = np.array(u)
-    # ih = mu*np.cos(np.linspace(0,(1-1/N)*L,N)*2*np.pi/lambda_)
-    # u = np.stack((u, ih), axis=0)
-    batch.append(u) 
+    if t >= start_time:
+        u = u_hat.backward(u)
+        u = np.array(u)
+        batch.append(u) 
     
 
 integrator = sf.ETDRK4(T, L=LinearRHS, N=NonlinearRHS, update=update)

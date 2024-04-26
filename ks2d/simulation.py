@@ -3,11 +3,14 @@ import numpy as np
 from shenfun import *
 
 dt = 0.01
+save_period_long = 50 # dt = 0.01s, period = 50 => saves one frame all 0.5s
 start_time = 200
-end_time = 201
-batch = []
-# batchsize = 64
-f = open('ks2d2.npy', 'wb')
+end_time_long = start_time + 30
+end_time_short = start_time + 2*dt
+batch_long = []
+batch_short = []
+f_short = open('ks2d_short.npy', 'wb')
+f_long = open('ks2d_long.npy', 'wb')
 
 # ---SHENFUN STUFF---
 
@@ -57,10 +60,13 @@ U_hat.mask_nyquist(mask)
 
 # Integrate using an exponential time integrator
 def update(self, u, u_hat, t, tstep, **params):
-    print(f"time = {t:.3f}/{end_time:.3f}",end="\r")
-    if t > start_time:
+    print(f"time = {t:.3f}/{end_time_long:.3f}",end="\r")
+    if round(t/dt) % save_period_long == 0 and start_time <= t:
         u = u_hat.backward(u)
-        batch.append(np.array(u)) # simply add coefficients into array
+        batch_long.append(np.array(u)) # simply add coefficients into array
+    if start_time <= t and t <= end_time_short:
+        u = u_hat.backward(u)
+        batch_short.append(np.array(u)) # simply add coefficients into array
 
 if __name__ == '__main__':
     par = {
@@ -71,6 +77,8 @@ if __name__ == '__main__':
     integrator = ETDRK4(T, L=LinearRHS, N=NonlinearRHS, update=update, **par)
     #integrator = RK4(T, L=LinearRHS, N=NonlinearRHS, update=update, **par)
     integrator.setup(dt)
-    U_hat = integrator.solve(U, U_hat, dt, (0, end_time))
-    np.save(f, np.array(batch))
-    batch.clear()
+    U_hat = integrator.solve(U, U_hat, dt, (0, end_time_long))
+    np.save(f_short, np.array(batch_short))
+    np.save(f_long, np.array(batch_long))
+    f_short.close()
+    f_long.close()
