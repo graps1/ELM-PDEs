@@ -1,12 +1,12 @@
-from sympy import symbols, exp, pi
+# from sympy import symbols, exp, pi
 import numpy as np
 from shenfun import *
 
 dt = 0.01
 save_period_long = 50 # dt = 0.01s, period = 50 => saves one frame all 0.5s
-start_time = 200
+start_time = 0 # 200
 end_time_long = start_time + 30
-end_time_short = start_time + 2*dt
+end_time_short = start_time + 10*dt
 batch_long = []
 batch_short = []
 f_short = open('ks2d_short.npy', 'wb')
@@ -15,8 +15,8 @@ f_long = open('ks2d_long.npy', 'wb')
 # ---SHENFUN STUFF---
 
 # Use sympy to set up initial condition
-x, y = symbols("x,y", real=True)
-ue = exp(-0.01*((x-30*pi)**2+(y-30*pi)**2))        # + exp(-0.02*((x-15*np.pi)**2+(y)**2))
+# x, y = symbols("x,y", real=True)
+# ue = exp(-0.01*((x-30*pi)**2+(y-30*pi)**2))        # + exp(-0.02*((x-15*np.pi)**2+(y)**2)
 
 # Size of discretization
 N = (256, 256)
@@ -25,7 +25,6 @@ K0 = FunctionSpace(N[0], 'F', dtype='D', domain=(0, 60*np.pi))
 K1 = FunctionSpace(N[1], 'F', dtype='d', domain=(0, 60*np.pi))
 T = TensorProductSpace(comm, (K0, K1), **{'planner_effort': 'FFTW_MEASURE'})
 TV = VectorSpace(T)
-padding_factor = 1.5
 Tp = T.get_dealiased()
 TVp = VectorSpace(Tp)
 gradu = Array(TVp)
@@ -34,7 +33,7 @@ u = TrialFunction(T)
 v = TestFunction(T)
 
 # Create solution and work arrays
-U = Array(T, buffer=ue)
+U = Array(T, buffer=np.load("ks2d_initial.npy"))
 U_hat = Function(T)
 gradu = Array(TVp)
 K = np.array(T.local_wavenumbers(True, True, True))
