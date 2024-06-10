@@ -1,16 +1,25 @@
 # from sympy import symbols, exp, pi
 import numpy as np
 from shenfun import *
+from math import remainder
 
-dt = 0.01
-save_period_long = 50 # dt = 0.01s, period = 50 => saves one frame all 0.5s
-start_time = 0 # 200
-end_time_long = start_time + 30
-end_time_short = start_time + 10*dt
-batch_long = []
+dt = 0.001
+
+save_period_very_short = 0.001
+save_period_short = 0.01
+save_period_long = 0.5
+
+end_time_very_short = 10*save_period_very_short
+end_time_short = 10*save_period_short
+end_time_long = 30
+
+batch_very_short = []
 batch_short = []
-f_short = open('ks2d_short.npy', 'wb')
-f_long = open('ks2d_long.npy', 'wb')
+batch_long = []
+
+f_very_short = open('ks2d2_very_short.npy', 'wb')
+f_short = open('ks2d2_short.npy', 'wb')
+f_long = open('ks2d2_long.npy', 'wb')
 
 # ---SHENFUN STUFF---
 
@@ -25,9 +34,7 @@ K0 = FunctionSpace(N[0], 'F', dtype='D', domain=(0, 60*np.pi))
 K1 = FunctionSpace(N[1], 'F', dtype='d', domain=(0, 60*np.pi))
 T = TensorProductSpace(comm, (K0, K1), **{'planner_effort': 'FFTW_MEASURE'})
 TV = VectorSpace(T)
-Tp = T.get_dealiased()
-TVp = VectorSpace(Tp)
-gradu = Array(TVp)
+gradu = Array(TV)
 
 u = TrialFunction(T)
 v = TestFunction(T)
@@ -35,7 +42,7 @@ v = TestFunction(T)
 # Create solution and work arrays
 U = Array(T, buffer=np.load("ks2d_initial.npy"))
 U_hat = Function(T)
-gradu = Array(TVp)
+gradu = Array(TV)
 K = np.array(T.local_wavenumbers(True, True, True))
 mask = T.get_mask_nyquist()
 
@@ -45,8 +52,8 @@ def LinearRHS(self, u, **params):
 
 def NonlinearRHS(self, U, U_hat, dU, gradu, **params):
     # Assemble nonlinear term
-    gradu = TVp.backward(1j*K*U_hat, gradu)
-    dU = Tp.forward(0.5*(gradu[0]*gradu[0]+gradu[1]*gradu[1]), dU)
+    gradu = TV.backward(1j*K*U_hat, gradu)
+    dU = T.forward(0.5*(gradu[0]*gradu[0]+gradu[1]*gradu[1]), dU)
     dU.mask_nyquist(mask)
     if comm.Get_rank() == 0:
         dU[0, 0] = 0
@@ -60,12 +67,13 @@ U_hat.mask_nyquist(mask)
 # Integrate using an exponential time integrator
 def update(self, u, u_hat, t, tstep, **params):
     print(f"time = {t:.3f}/{end_time_long:.3f}",end="\r")
-    if round(t/dt) % save_period_long == 0 and start_time <= t:
-        u = u_hat.backward(u)
+    u = u_hat.backward(u)
+    if abs(remainder(t, save_period_long)) < 1e-8:
         batch_long.append(np.array(u)) # simply add coefficients into array
-    if start_time <= t and t <= end_time_short:
-        u = u_hat.backward(u)
+    if abs(remainder(t, save_period_short)) < 1e-8 and t <= end_time_short:
         batch_short.append(np.array(u)) # simply add coefficients into array
+    if abs(remainder(t, save_period_very_short)) < 1e-8 and t <= end_time_very_short:
+        batch_very_short.append(np.array(u)) # simply add coefficients into array
 
 if __name__ == '__main__':
     par = {
@@ -77,7 +85,9 @@ if __name__ == '__main__':
     #integrator = RK4(T, L=LinearRHS, N=NonlinearRHS, update=update, **par)
     integrator.setup(dt)
     U_hat = integrator.solve(U, U_hat, dt, (0, end_time_long))
+    np.save(f_very_short, np.array(batch_very_short))
     np.save(f_short, np.array(batch_short))
     np.save(f_long, np.array(batch_long))
+    f_very_short.close()
     f_short.close()
     f_long.close()
