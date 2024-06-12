@@ -17,9 +17,9 @@ batch_very_short = []
 batch_short = []
 batch_long = []
 
-f_very_short = open('ks2d2_very_short.npy', 'wb')
-f_short = open('ks2d2_short.npy', 'wb')
-f_long = open('ks2d2_long.npy', 'wb')
+f_very_short = open('ks2d_very_short.npy', 'wb')
+f_short = open('ks2d_short.npy', 'wb')
+f_long = open('ks2d_long.npy', 'wb')
 
 # ---SHENFUN STUFF---
 
