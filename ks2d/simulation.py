@@ -3,21 +3,21 @@ import numpy as np
 from shenfun import *
 from math import remainder
 
-dt = 0.001
+dt = 0.01
 
-save_period_very_short = 0.001
+# save_period_very_short = 0.001
 save_period_short = 0.01
 save_period_long = 0.5
 
-end_time_very_short = 10*save_period_very_short
+# end_time_very_short = 10*save_period_very_short
 end_time_short = 10*save_period_short
 end_time_long = 30
 
-batch_very_short = []
+# batch_very_short = []
 batch_short = []
 batch_long = []
 
-f_very_short = open('ks2d_very_short.npy', 'wb')
+# f_very_short = open('ks2d_very_short.npy', 'wb')
 f_short = open('ks2d_short.npy', 'wb')
 f_long = open('ks2d_long.npy', 'wb')
 
@@ -72,8 +72,8 @@ def update(self, u, u_hat, t, tstep, **params):
         batch_long.append(np.array(u)) # simply add coefficients into array
     if abs(remainder(t, save_period_short)) < 1e-8 and t <= end_time_short:
         batch_short.append(np.array(u)) # simply add coefficients into array
-    if abs(remainder(t, save_period_very_short)) < 1e-8 and t <= end_time_very_short:
-        batch_very_short.append(np.array(u)) # simply add coefficients into array
+    # if abs(remainder(t, save_period_very_short)) < 1e-8 and t <= end_time_very_short:
+    #     batch_very_short.append(np.array(u)) # simply add coefficients into array
 
 if __name__ == '__main__':
     par = {
@@ -85,9 +85,9 @@ if __name__ == '__main__':
     #integrator = RK4(T, L=LinearRHS, N=NonlinearRHS, update=update, **par)
     integrator.setup(dt)
     U_hat = integrator.solve(U, U_hat, dt, (0, end_time_long))
-    np.save(f_very_short, np.array(batch_very_short))
+    # np.save(f_very_short, np.array(batch_very_short))
     np.save(f_short, np.array(batch_short))
     np.save(f_long, np.array(batch_long))
-    f_very_short.close()
+    # f_very_short.close()
     f_short.close()
     f_long.close()
