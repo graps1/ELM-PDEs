@@ -106,6 +106,12 @@ class ELM2D(torch.nn.Module):
             torch.nn.Softplus())
         self.lout = torch.nn.Linear(
             self.hidden, self.step.prod().item(), dtype=torch.float64, bias=False)
+        
+    def __normalize(self, X):
+        return (X - self.norm_minval) / (self.norm_maxval - self.norm_minval)
+    
+    def __denormalize(self, X):
+        return X*(self.norm_maxval - self.norm_minval) + self.norm_minval
 
     def pad(self, X):
         return torch.nn.functional.pad(X, 
@@ -124,8 +130,17 @@ class ELM2D(torch.nn.Module):
         return X
 
     def forward(self, X, nr_symmetries=1):
+        squeezed = len(X.shape) == 2
+        if squeezed: X = X.unsqueeze(0)
+        
         D = torch.tensor(X.shape[1:])
         assert (D % self.step == 0).all()
+
+        # prepares data
+        mean = X.mean(dim=[1,2])
+        X -= mean 
+        X = self.__normalize(X)
+
         X = X.unsqueeze(1)
         X = self.pad(X)
         X = self.batched(X)
@@ -140,9 +155,17 @@ class ELM2D(torch.nn.Module):
             X = X.mean(dim=1)
             X = X.view(*X.shape[:2], self.step[0]*self.step[1])
         X = self.unbatch(X, D)
+
+        X = self.__denormalize(X) + mean
+        if squeezed: X = X.squeeze(0)
         return X
     
     def train(self, D, nr_symmetries=1, stopping_threshold=1e-5, noise=1e-4, logging=True, callback=None):
+        # prepares training data
+        d = next(iter(D))
+        d = d - d.mean()
+        self.norm_maxval, self.norm_minval = d.max(), d.min()
+
         if noise > 0: noise_distr = torch.distributions.Normal(0,noise)
 
         E_PhiTPhi = 0
@@ -161,8 +184,12 @@ class ELM2D(torch.nn.Module):
                 # selects the appropriate windows
                 X_train = d[i,   None, j0:j0+self.ks[0],
                                        j1:j1+self.ks[1]]
+                mean = d[i,:,:].mean()
+                X_train = self.__normalize( X_train - mean )
+
                 Y_train = d[i+1, None, j0+self.extent[0]:j0+self.ks[0]-self.extent[0],
                                        j1+self.extent[1]:j1+self.ks[1]-self.extent[1]]
+                Y_train = self.__normalize( Y_train - mean )
 
                 if nr_symmetries > 1:
                     X_train = expand_and_apply_symmetries(X_train, nr_symmetries=nr_symmetries)
@@ -221,24 +248,24 @@ def R(Y, g, dims, inv=False):
     return operations[g](Y)
 
 
-class Dataset:
-    def __init__(self, fname):
-        self.val = None
-        self.f = None
-        self.fname = fname
-
-    def __del__(self):
-        if self.f is not None: self.f.close()
-
-    def __iter__(self):
-        if self.f is not None: self.f.close()
-        self.f = open(self.fname, 'rb')
-        return self
-
-    def __next__(self):
-        try: 
-            val = torch.tensor(np.load(self.f))
-            return val
-        except: 
-            self.f = open(self.fname, 'rb')
-            raise StopIteration
+# class Dataset:
+#     def __init__(self, fname):
+#         self.val = None
+#         self.f = None
+#         self.fname = fname
+# 
+#     def __del__(self):
+#         if self.f is not None: self.f.close()
+# 
+#     def __iter__(self):
+#         if self.f is not None: self.f.close()
+#         self.f = open(self.fname, 'rb')
+#         return self
+# 
+#     def __next__(self):
+#         try: 
+#             val = torch.tensor(np.load(self.f))
+#             return val
+#         except: 
+#             self.f = open(self.fname, 'rb')
+#             raise StopIteration

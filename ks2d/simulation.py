@@ -21,6 +21,8 @@ batch_long = []
 f_short = open('ks2d_short.npy', 'wb')
 f_long = open('ks2d_long.npy', 'wb')
 
+average = 0
+
 # ---SHENFUN STUFF---
 
 # Use sympy to set up initial condition
@@ -51,12 +53,11 @@ def LinearRHS(self, u, **params):
     return -div(grad(u))-div(grad(div(grad(u))))
 
 def NonlinearRHS(self, U, U_hat, dU, gradu, **params):
+    global average
     # Assemble nonlinear term
     gradu = TV.backward(1j*K*U_hat, gradu)
     dU = T.forward(0.5*(gradu[0]*gradu[0]+gradu[1]*gradu[1]), dU)
     dU.mask_nyquist(mask)
-    if comm.Get_rank() == 0:
-        dU[0, 0] = 0
     return -dU
 
 #initialize
@@ -67,7 +68,10 @@ U_hat.mask_nyquist(mask)
 # Integrate using an exponential time integrator
 def update(self, u, u_hat, t, tstep, **params):
     print(f"time = {t:.3f}/{end_time_long:.3f}",end="\r")
-    u = u_hat.backward(u)
+    global average
+    average += u_hat[0,0].real
+    u_hat[0, 0] = 0
+    u = u_hat.backward(u) + average
     if abs(remainder(t, save_period_long)) < 1e-8:
         batch_long.append(np.array(u)) # simply add coefficients into array
     if abs(remainder(t, save_period_short)) < 1e-8 and t <= end_time_short:
