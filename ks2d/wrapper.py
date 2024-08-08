@@ -33,13 +33,13 @@ class KS2DModelWrapper(torch.nn.Module):
         Y = Y + X.mean()
         return Y
 
-    def forward(self, X):
+    def forward(self, X, **kwargs):
         assert self.__is_trained
         squeezed = len(X.shape) == 2
         if squeezed: X = X.unsqueeze(0)
 
         Y = self.data_to_input(X)
-        Y = self.model(Y)
+        Y = self.model(Y, **kwargs)
         Y = self.output_to_data(X, Y)
 
         if squeezed: Y = Y.squeeze(0)
