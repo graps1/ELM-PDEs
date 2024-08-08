@@ -112,6 +112,7 @@ class ELM2D(torch.nn.Module):
             "circular")
 
     def batched(self, X):
+        X = X.unsqueeze(1)
         X = torch.nn.functional.unfold(X, self.ks, stride=self.step)
         X = X.permute((0,2,1))
         return X
@@ -126,25 +127,24 @@ class ELM2D(torch.nn.Module):
         D = torch.tensor(X.shape[1:])
         assert (D % self.step == 0).all()
 
-        X = X.unsqueeze(1)
+        X = apply_symmetries(X, nr_symmetries)
+        X = X.view(-1, *X.shape[2:])
+
         X = self.pad(X)
         X = self.batched(X)
-        if nr_symmetries > 1:
-            X = X.view(*X.shape[:2], self.ks[0], self.ks[1])
-            X = expand_and_apply_symmetries(X, dims=[2,3], nr_symmetries=nr_symmetries)
-            X = X.view(*X.shape[:3], self.ks[0]*self.ks[1])
         X = self.lout(self.phi(X))
-        if nr_symmetries > 1:
-            X = X.view(*X.shape[:3], self.step[0], self.step[1])
-            X = apply_symmetries(X, dims=[2,3], nr_symmetries=nr_symmetries, inv=True)
-            X = X.mean(dim=1)
-            X = X.view(*X.shape[:2], self.step[0]*self.step[1])
         X = self.unbatch(X, D)
+
+        X = X.view(-1, nr_symmetries, *X.shape[1:])
+        X = apply_symmetries(X, nr_symmetries, inv=True)
+        X = X.mean(dim=1)
 
         return X
 
     def train(self, X, Y, nr_symmetries=1, stopping_threshold=1e-5, noise=1e-4, logging=True, callback=None):
         bs, N0, N1 = X.shape
+        X = apply_symmetries(X, nr_symmetries=nr_symmetries)
+        Y = apply_symmetries(Y, nr_symmetries=nr_symmetries)
 
         if noise > 0: noise_distr = torch.distributions.Normal(0,noise)
 
@@ -160,14 +160,10 @@ class ELM2D(torch.nn.Module):
             j1 = torch.randint(N1-self.ks[1],(1,))[0]
 
             # selects the appropriate windows
-            X_train = X[i,   None, j0:j0+self.ks[0],
-                                   j1:j1+self.ks[1]]
-            Y_train = Y[i,   None, j0+self.extent[0]:j0+self.ks[0]-self.extent[0],
-                                   j1+self.extent[1]:j1+self.ks[1]-self.extent[1]]
-
-            if nr_symmetries > 1:
-                X_train = expand_and_apply_symmetries(X_train, nr_symmetries=nr_symmetries)
-                Y_train = expand_and_apply_symmetries(Y_train, nr_symmetries=nr_symmetries)
+            X_train = X[i,   :, j0:j0+self.ks[0],
+                                j1:j1+self.ks[1]]
+            Y_train = Y[i,   :, j0+self.extent[0]:j0+self.ks[0]-self.extent[0],
+                                j1+self.extent[1]:j1+self.ks[1]-self.extent[1]]
             
             X_train = X_train.reshape(-1,self.ks[0]*self.ks[1])
             Y_train = Y_train.reshape(-1,self.step[0]*self.step[1])
@@ -194,29 +190,24 @@ class ELM2D(torch.nn.Module):
         A = torch.linalg.solve(E_PhiTPhi, E_PhiTY)
         self.lout.weight.data = A.transpose(0,1)
 
+def apply_symmetries(X, nr_symmetries, inv=False):
+    assert len(X.shape) in [3,4]
 
-def expand_and_apply_symmetries(X, dims=[1,2], nr_symmetries=8, inv=False):
-    X = X.unsqueeze(1)
-    X = X.expand(X.shape[0],nr_symmetries,*X.shape[2:])
-    return apply_symmetries(X, dims, nr_symmetries=nr_symmetries, inv=inv)
+    # expand tensor
+    if len(X.shape) == 3: 
+        X = X.unsqueeze(1)
+        X = X.repeat(1,nr_symmetries,1,1)
 
-def apply_symmetries(X, dims=[1,2], nr_symmetries=8, inv=False):
-    X_sym = [ R(X[:,g,...], g, dims, inv=inv) for g in range(nr_symmetries) ]
-    return torch.stack(X_sym, dim=1)
-
-def R(Y, g, dims, inv=False):
-    d1, d2 = dims
-    operations = [
-        lambda x: x,
-        lambda x: torch.flip(x, [d1]),
-        lambda x: torch.flip(x, [d2]),
-        lambda x: torch.flip(x, [d1,d2]),
-        lambda x: x.transpose(d1,d2),
-        (lambda x: torch.flip(x.transpose(d1,d2), [d1]))   if inv else 
-        (lambda x: torch.flip(x, [d1]).transpose(d1,d2)),
-        (lambda x: torch.flip(x.transpose(d1,d2), [d2]))   if inv else 
-        (lambda x: torch.flip(x, [d2]).transpose(d1,d2)),
-        (lambda x: torch.flip(x.transpose(d1,d2), [d1,d2])) if inv else 
-        (lambda x: torch.flip(x, [d1,d2]).transpose(d1,d2))
-    ]
-    return operations[g](Y)
+    if nr_symmetries >= 2: X[:,1,:,:] = X[:,1,:,:].clone().flip([1])
+    if nr_symmetries >= 3: X[:,2,:,:] = X[:,2,:,:].clone().flip([2])
+    if nr_symmetries >= 4: X[:,3,:,:] = X[:,3,:,:].clone().flip([1,2])
+    if nr_symmetries >= 5: X[:,4,:,:] = X[:,4,:,:].clone().transpose(1,2)
+    if inv:
+        if nr_symmetries >= 6: X[:,5,:,:] = X[:,5,:,:].clone().transpose(1,2).flip([1])
+        if nr_symmetries >= 7: X[:,6,:,:] = X[:,6,:,:].clone().transpose(1,2).flip([2])
+        if nr_symmetries >= 8: X[:,7,:,:] = X[:,7,:,:].clone().transpose(1,2).flip([1,2])
+    else:
+        if nr_symmetries >= 6: X[:,5,:,:] = X[:,5,:,:].clone().flip([1]).transpose(1,2)
+        if nr_symmetries >= 7: X[:,6,:,:] = X[:,6,:,:].clone().flip([2]).transpose(1,2)
+        if nr_symmetries >= 8: X[:,7,:,:] = X[:,7,:,:].clone().flip([1,2]).transpose(1,2)
+    return X
