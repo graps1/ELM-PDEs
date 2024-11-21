@@ -3,20 +3,21 @@ import torch
 class KS2DModelWrapper(torch.nn.Module):
     def __init__(self, model):
         super().__init__()
-        self.__is_trained = False
         self.model = model
+        self.X_min = 0
+        self.X_max = 1
 
-    def train(self, X, Y, **kwargs):
+    def setup_normalization(self, X):
         mean = X.mean(dim=[1,2])
         self.X_min = (X - mean).min()
         self.X_max = (X - mean).max()
+
+    def train(self, X, Y, **kwargs):
 
         self.model.train(
             self.data_to_input(X), 
             self.data_to_output(X, Y), 
             **kwargs)
-
-        self.__is_trained = True
 
     def data_to_input(self, X):
         X = X - X.mean(dim=[1,2])
@@ -34,7 +35,6 @@ class KS2DModelWrapper(torch.nn.Module):
         return Y
 
     def forward(self, X, **kwargs):
-        assert self.__is_trained
         squeezed = len(X.shape) == 2
         if squeezed: X = X.unsqueeze(0)
 
